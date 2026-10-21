@@ -14,23 +14,38 @@ install-reviactyl.sh
 - Debian 12 (Bookworm)
 - VPS/KVM penuh dengan systemd, dijalankan sebagai **root**
 
-## Cara pakai
+## Cara Install — Pilih 2 Model
 
-### Mode interaktif (ditanya satu-satu)
+### Model 1 — Bash (1 perintah, langsung jalan dari GitHub)
+
+Tidak perlu download apa pun. Jalankan di VPS sebagai root:
 
 ```bash
+bash <(curl -fsSL https://raw.githubusercontent.com/Lngtmi/installer-reviactyl/main/install-reviactyl.sh) install
+```
+
+Script akan bertanya domain, subdomain, dan data admin satu per satu (mode interaktif).
+
+Mode otomatis (tanpa pertanyaan):
+
+```bash
+AUTO_MODE=1 DOMAIN=contoh.com ADMIN_USER=admin@contoh.com ADMIN_PASS='password_admin_panel' \
+  bash <(curl -fsSL https://raw.githubusercontent.com/Lngtmi/installer-reviactyl/main/install-reviactyl.sh) install
+```
+
+> Gunakan selalu bentuk `bash <(curl ...)` di atas, **bukan** `curl ... | bash` — bentuk pipa merusak pertanyaan interaktif script.
+
+### Model 2 — Source Code (download / clone dulu)
+
+```bash
+git clone https://github.com/Lngtmi/installer-reviactyl.git
+cd installer-reviactyl
 sudo bash install-reviactyl.sh install
 ```
 
-### Mode otomatis (semua via environment variable)
+Atau unduh ZIP dari tombol **Code → Download ZIP** di halaman repo ini, ekstrak, lalu jalankan `sudo bash install-reviactyl.sh install`.
 
-```bash
-sudo AUTO_MODE=1 \
-  DOMAIN=contoh.com \
-  ADMIN_USER=admin@contoh.com \
-  ADMIN_PASS='password_admin_panel' \
-  bash install-reviactyl.sh install
-```
+### Variabel mode otomatis
 
 | Variable | Wajib | Keterangan |
 | --- | --- | --- |
