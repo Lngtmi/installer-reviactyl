@@ -54,5 +54,9 @@ sudo bash install-reviactyl.sh ubah-domain
 - File yang diubah/diinstall tercatat di `/root/reviactyl-installer.env` di VPS.
 - Simpan password admin dan data login panelmu sendiri; script ini tidak menyimpan kredensial apa pun di repository.
 
+## Kontak
+
+Ada pertanyaan atau butuh bantuan? Hubungi saya di Telegram: [@pratamanie](https://t.me/pratamanie)
+
 ---
 SOURCE CODE BY PRATAMA
