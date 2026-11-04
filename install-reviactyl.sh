@@ -361,12 +361,26 @@ SQL
     echo "[AUTO] Konfigurasi aplikasi dan database selesai."
   else
     echo
-    echo "Isi wizard berikut dengan:"
-    echo "  Application URL : https://$PANEL_FQDN"
-    echo "  Database host   : 127.0.0.1"
-    echo "  Database name   : panel"
-    echo "  Database user   : pterodactyl"
-    echo "  Database pass   : $DB_PASSWORD"
+    echo "PANDUAN MENGISI WIZARD (ikuti urutannya):"
+    echo "  [Setup]  Egg Author Email : email kamu sendiri"
+    echo "  [Setup]  Application URL  : https://$PANEL_FQDN"
+    echo "  [Setup]  Timezone         : Asia/Jakarta"
+    echo "  [Setup]  Cache Driver     : redis"
+    echo "  [Setup]  Session Driver   : redis"
+    echo "  [Setup]  Queue Driver     : redis"
+    echo "  [Setup]  UI settings editor : yes"
+    echo "  [Setup]  Telemetry        : no"
+    echo "  [Setup]  Redis Host/Password/Port : Enter saja (bawaan)"
+    echo "  [DB]     Database Driver  : mariadb   <-- JANGAN Enter! Bawaan SQLite akan GAGAL."
+    echo "  [DB]     Database host    : 127.0.0.1 (Enter)"
+    echo "  [DB]     Database port    : 3306 (Enter)"
+    echo "  [DB]     Database name    : panel"
+    echo "  [DB]     Database user    : pterodactyl"
+    echo "  [DB]     Database pass    : $DB_PASSWORD"
+    echo "  [Mail]   Mail Driver      : log"
+    echo "  [Mail]   Mail From Address: no-reply@$DOMAIN"
+    echo "  [Mail]   Mail From Name   : Reviactyl"
+    echo "  Setelah wizard: buat akun admin panel (email/username/password bebas, min. 8 karakter)."
     read -r -p "Tekan Enter untuk membuka wizard..." _
     php artisan p:environment:setup
     php artisan p:environment:database

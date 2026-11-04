@@ -50,6 +50,36 @@ sudo bash install-reviactyl.sh install
 
 Atau unduh ZIP dari tombol **Code → Download ZIP** di halaman repo ini, ekstrak, lalu jalankan `sudo bash install-reviactyl.sh install`.
 
+## Panduan Mengisi Wizard (mode interaktif)
+
+Setelah pertanyaan domain dan (untuk mode Direct) pemeriksaan A record selesai, installer membuka wizard Reviactyl. Isi **persis** seperti ini, urut dari atas:
+
+**Wizard setup:**
+1. Egg Author Email: email kamu sendiri
+2. Application URL: `https://<subdomain-panel>.<domain>` — persis yang ditampilkan script
+3. Application Timezone: `Asia/Jakarta`
+4. Cache Driver: `redis`
+5. Session Driver: `redis`
+6. Queue Driver: `redis`
+7. Enable UI based settings editor: `yes`
+8. Enable telemetry: `no`
+9. Redis Host / Redis Password / Redis Port: **Enter saja** (pakai bawaan; password dikosongkan)
+
+**Wizard database:**
+10. **Database Driver: `mariadb`** — ⚠️ JANGAN tekan Enter! Pilihan bawaannya adalah **SQLite** dan instalasi akan **gagal** ("Database file ... does not exist")
+11. Database Host: Enter (127.0.0.1)
+12. Database Port: Enter (3306)
+13. Database Name: `panel`
+14. Database Username: `pterodactyl`
+15. Database Password: password yang ditampilkan script di blok "PANDUAN MENGISI WIZARD" sebelum wizard dibuka (berubah setiap instalasi — jangan pakai dari instalasi sebelumnya)
+
+**Wizard email:**
+16. Mail Driver: `log`
+17. Mail From Address: `no-reply@<domain kamu>`
+18. Mail From Name: `Reviactyl`
+
+**Terakhir:** buat akun admin panel — email, username, nama, dan password login (minimal 8 karakter), bebas sesuai keinginanmu. Setelah itu script berjalan sendiri sampai muncul tulisan **SELESAI** beserta alamat panelnya.
+
 ### Variabel mode otomatis
 
 | Variable | Wajib | Keterangan |
