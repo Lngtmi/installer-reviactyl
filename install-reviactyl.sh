@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
 # Reviactyl installer for Ubuntu 22.04 / 24.04 or Debian 12 (versi GitHub).
+# Jalankan tanpa argumen untuk menu: 1) Install Panel  2) Setup Agent.
 # Jaringan terdeteksi otomatis: IPv4 publik -> mode Direct (HTTPS langsung,
-# A record panel + node wajib dibuat lebih dulu), NAT -> Cloudflare Tunnel.
-# Run as root: bash install-reviactyl.sh install
+# A record wajib dibuat lebih dulu), NAT -> Cloudflare Tunnel.
+# Run as root: bash install-reviactyl.sh
 
 set -Eeuo pipefail
 trap 'rc=$?; echo "[INSTALL_ERROR] exit=$rc line=$LINENO command=$BASH_COMMAND" >&2; exit "$rc"' ERR
@@ -515,13 +516,171 @@ EOF
   echo
   echo "SELESAI: buka https://$PANEL_FQDN"
   if [[ $DIRECT_MODE == 1 ]]; then
-    echo "Buat Node dengan FQDN/IP publik $NODE_FQDN dan port 8080; pilih HTTP/tanpa SSL dan Not Behind Proxy."
+    echo "Buat Node dengan FQDN $NODE_FQDN dan port 8080; pilih SSL aktif dan Not Behind Proxy."
+    echo "Lalu jalankan lagi script ini dan pilih menu 2 (Setup Agent) untuk memasang sertifikat node + config sampai node menyala hijau."
   else
     echo "Buat Node dengan FQDN $NODE_FQDN dan port $AGENT_PORT."
+    echo "Lalu jalankan lagi script ini dan pilih menu 2 (Setup Agent) untuk menempel config node dan menyalakan Agent."
   fi
   echo "Salin konfigurasi dari tab Node > Configuration ke /etc/reviactyl/config.yml, lalu jalankan:"
   echo "  systemctl enable --now agent"
   echo "Untuk ganti domain nanti: bash $0 ubah-domain"
+}
+
+dns_gate_node() {
+  # Versi satu-host dari gate DNS mode direct, untuk Setup Agent: sertifikat
+  # node hanya bisa terbit bila FQDN node sudah mengarah ke IP VPS ini.
+  local host=$1 ips ans
+  echo
+  echo "================================================================"
+  echo "  CATATAN - NODE MODE DIRECT (IPv4 PUBLIK: $PUBLIC_IP)"
+  echo "================================================================"
+  echo "  Buat DULU A record berikut di panel DNS domain kamu"
+  echo "  (bila memakai Cloudflare, pilih 'DNS only' / awan abu-abu):"
+  echo
+  echo "    A    $host    ->    $PUBLIC_IP"
+  echo
+  echo "  Record ini dipakai untuk menerbitkan sertifikat HTTPS node."
+  echo "================================================================"
+  while true; do
+    ips=$(resolve_public_ips "$host")
+    if grep -qx "$PUBLIC_IP" <<<"$ips"; then echo "[DNS_OK] $host sudah mengarah ke $PUBLIC_IP."; return 0; fi
+    if [[ -n $ips ]]; then
+      echo "[DNS_BELUM] $host saat ini mengarah ke: $(echo $ips) (seharusnya $PUBLIC_IP)."
+    else
+      echo "[DNS_BELUM] $host belum ter-resolve sama sekali."
+    fi
+    read -r -p "Tekan Enter untuk memeriksa lagi, atau ketik 'batal' untuk berhenti: " ans || die "Dibatalkan. Buat dulu A record di atas, lalu jalankan ulang."
+    if [[ ${ans,,} == batal ]]; then die "Dibatalkan. Buat dulu A record di atas, lalu jalankan ulang."; fi
+  done
+}
+
+setup_agent() {
+  # Pasang Reviactyl Agent (daemon node) di VPS ini untuk panel yang sudah
+  # ada. Alur meniru versi bot: deteksi IP -> pengaturan node per mode ->
+  # Docker + binary Agent -> (direct) sertifikat node -> tempel config dari
+  # panel -> service dinyalakan dan diperiksa.
+  need_root
+  source /etc/os-release
+  [[ ( ${ID:-} == ubuntu && ( ${VERSION_ID:-} == 22.04 || ${VERSION_ID:-} == 24.04 ) ) || ( ${ID:-} == debian && ${VERSION_ID:-} == 12 ) ]] || die "Skrip ini mendukung Ubuntu 22.04/24.04 atau Debian 12. OS Anda: ${PRETTY_NAME:-tidak diketahui}."
+  choose_network_mode
+  local node_fqdn stopped_nginx=0 code
+  read -r -p "FQDN node (contoh: node.domainkamu.com): " node_fqdn
+  [[ $node_fqdn =~ ^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]] || die "Format FQDN node tidak valid."
+
+  echo
+  echo "Siapkan node di panel kamu (Admin > Nodes) dengan pengaturan ini:"
+  if [[ $DIRECT_MODE == 1 ]]; then
+    echo "  FQDN         : $node_fqdn"
+    echo "  SSL          : AKTIF (Use SSL Connection)"
+    echo "  Behind Proxy : TIDAK"
+    echo "  Daemon Port  : 8080"
+  else
+    echo "  FQDN         : $node_fqdn"
+    echo "  SSL          : AKTIF (Use SSL Connection)"
+    echo "  Behind Proxy : YA"
+    echo "  Daemon Port  : 443"
+    echo "  (Mode tunnel: VPS ini harus dijangkau panel lewat tunnel yang"
+    echo "   mengarah ke sini — biasanya node satu VPS dengan panelnya.)"
+  fi
+  echo "Setelah node dibuat, buka tab 'Configuration' pada node itu —"
+  echo "isinya akan kamu tempel di langkah terakhir."
+  read -r -p "Tekan Enter kalau node sudah dibuat di panel..." _
+
+  if [[ $DIRECT_MODE == 1 ]]; then dns_gate_node "$node_fqdn"; fi
+
+  wait_for_apt
+  apt update
+  DEBIAN_FRONTEND=noninteractive apt install -y curl certbot
+  if ! command -v docker >/dev/null 2>&1; then
+    curl --connect-timeout 20 --max-time 300 -fsSL https://get.docker.com/ | CHANNEL=stable bash
+  fi
+  systemctl enable --now docker
+
+  # Pasang/perbarui binary Agent dengan aman: unduh ke .new dulu, lalu
+  # pindahkan — menimpa binary yang sedang berjalan langsung akan gagal
+  # (ETXTBSY).
+  systemctl stop agent 2>/dev/null || true
+  curl -fL -o /usr/local/bin/agent.new "https://github.com/reviactyl/agent/releases/latest/download/agent_linux_$([[ "$(uname -m)" == x86_64 ]] && echo amd64 || echo arm64)"
+  chmod +x /usr/local/bin/agent.new
+  mv -f /usr/local/bin/agent.new /usr/local/bin/agent
+
+  if [[ $DIRECT_MODE == 1 ]]; then
+    if [[ -f /etc/letsencrypt/live/$node_fqdn/fullchain.pem ]]; then
+      echo "[CERT_OK] Sertifikat untuk $node_fqdn sudah ada."
+    else
+      echo "[CERT] Menerbitkan sertifikat Let's Encrypt untuk $node_fqdn..."
+      # certbot standalone butuh port 80 kosong; di VPS yang juga berisi
+      # panel, nginx dihentikan sebentar lalu dinyalakan lagi.
+      if systemctl is-active --quiet nginx; then systemctl stop nginx; stopped_nginx=1; fi
+      certbot certonly --standalone --non-interactive --agree-tos --register-unsafely-without-email -d "$node_fqdn" || true
+      if [[ $stopped_nginx == 1 ]]; then systemctl start nginx || true; fi
+      [[ -f /etc/letsencrypt/live/$node_fqdn/fullchain.pem ]] || die "Sertifikat untuk $node_fqdn gagal terbit. Pastikan A record-nya benar dan port 80 bisa diakses dari internet, lalu jalankan ulang."
+      echo "[CERT_OK] Sertifikat $node_fqdn terbit."
+    fi
+  fi
+
+  mkdir -p /etc/reviactyl
+  if [[ -f /etc/reviactyl/config.yml ]]; then
+    cp -a /etc/reviactyl/config.yml "/etc/reviactyl/config.yml.bak-$(date +%s)"
+    echo "[INFO] Config lama dicadangkan sebagai file .bak di /etc/reviactyl."
+  fi
+  echo
+  echo "Tempel isi config.yml dari panel (tab Node > Configuration) di bawah ini,"
+  echo "lalu tekan Ctrl+D setelah selesai menempel:"
+  cat > /etc/reviactyl/config.yml
+  if ! grep -qE '^[[:space:]]*uuid:' /etc/reviactyl/config.yml || ! grep -qE '^[[:space:]]*token' /etc/reviactyl/config.yml; then
+    die "Config sepertinya tidak lengkap (uuid/token tidak ditemukan). Jalankan ulang Setup Agent dan tempel config yang benar."
+  fi
+
+  cat >/etc/systemd/system/agent.service <<'EOF'
+[Unit]
+Description=Reviactyl Agent
+After=docker.service
+Requires=docker.service
+PartOf=docker.service
+[Service]
+User=root
+WorkingDirectory=/etc/reviactyl
+LimitNOFILE=4096
+PIDFile=/var/run/agent/daemon.pid
+ExecStart=/usr/local/bin/agent
+Restart=on-failure
+RestartSec=5s
+[Install]
+WantedBy=multi-user.target
+EOF
+  systemctl daemon-reload
+  systemctl enable --now agent
+  sleep 2
+  if ! systemctl is-active --quiet agent; then
+    journalctl -u agent --no-pager -n 25 >&2 || true
+    die "Service Agent gagal aktif."
+  fi
+  echo "[AGENT_OK] Service Agent aktif."
+  if [[ $DIRECT_MODE == 1 ]]; then
+    code=$(curl -sk -o /dev/null -w '%{http_code}' -m 10 --resolve "$node_fqdn:8080:127.0.0.1" "https://$node_fqdn:8080/" || true)
+    echo "[AGENT_CHECK] https://$node_fqdn:8080 menjawab HTTP ${code:-000} dari lokal (kode apa pun berarti daemon merespons)."
+  fi
+  echo
+  echo "SELESAI: node $node_fqdn seharusnya menyala hijau di panel dalam beberapa detik."
+  echo "Bila tetap merah: FQDN, port, dan SSL node di panel harus sama persis dengan pilihan mode di atas."
+}
+
+main_menu() {
+  echo "================================================================"
+  echo "  REVIACTYL — Installer Panel & Setup Agent (versi GitHub)"
+  echo "================================================================"
+  echo "  1) Install Panel Reviactyl"
+  echo "  2) Setup Agent (untuk VPS node — panelnya sudah ada)"
+  echo
+  local pilihan
+  read -r -p "Pilih [1/2]: " pilihan || pilihan=""
+  case "$pilihan" in
+    1) install_panel ;;
+    2) setup_agent ;;
+    *) die "Pilihan tidak dikenal. Jalankan ulang dan pilih 1 atau 2." ;;
+  esac
 }
 
 change_domain() {
@@ -547,6 +706,8 @@ change_domain() {
 
 case "${1:-}" in
   install) install_panel ;;
+  setup-agent) setup_agent ;;
   ubah-domain) change_domain ;;
-  *) echo "Pakai: sudo bash $0 {install|ubah-domain}"; exit 2 ;;
+  "") main_menu ;;
+  *) echo "Pakai: sudo bash $0 {install|setup-agent|ubah-domain} — atau jalankan tanpa argumen untuk membuka menu."; exit 2 ;;
 esac
