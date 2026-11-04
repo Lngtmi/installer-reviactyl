@@ -197,6 +197,19 @@ ask_network() {
   [[ $AGENT_PORT =~ ^[0-9]+$ ]] || die "Port harus angka."
   PANEL_FQDN="${PANEL_SUB}.${DOMAIN}"
   NODE_FQDN="${NODE_SUB}.${DOMAIN}"
+  # Data admin ditanyakan SEKARANG, di awal, supaya tidak ada wizard bawaan
+  # panel yang perlu diisi di tengah instalasi — semua konfigurasi panel
+  # diisi otomatis oleh installer (lihat blok set_env di install_panel).
+  echo
+  echo "Terakhir, data untuk akun admin panel:"
+  read -r -p "Email admin panel (untuk login): " ADMIN_EMAIL
+  [[ $ADMIN_EMAIL =~ ^[^@[:space:]]+@[^@[:space:]]+\.[^@[:space:]]+$ ]] || die "Format email admin tidak valid."
+  read -r -p "Username admin panel: " ADMIN_USERNAME
+  [[ -n $ADMIN_USERNAME ]] || die "Username admin wajib diisi."
+  read -r -s -p "Password admin panel (min. 8 karakter, tidak tampil saat diketik): " ADMIN_PASS
+  echo
+  [[ ${#ADMIN_PASS} -ge 8 ]] || die "Password admin minimal 8 karakter."
+  MAIL_FROM="no-reply@${DOMAIN}"
 }
 
 save_state() {
@@ -272,6 +285,7 @@ install_panel() {
   echo
   echo "Panel : https://$PANEL_FQDN"
   echo "Node  : https://$NODE_FQDN (port Agent: $AGENT_PORT)"
+  [[ ${AUTO_MODE:-0} == 1 ]] || echo "Admin : $ADMIN_EMAIL (username: $ADMIN_USERNAME)"
   echo ""
   echo "PERINGATAN: mode ini menghapus Pterodactyl/Reviactyl lama, konfigurasi Wings/Agent,"
   echo "database MySQL bernama 'panel', serta Tunnel Reviactyl lama. Tunnel layanan lain tidak disentuh."
@@ -341,53 +355,35 @@ SQL
   if [[ ${AUTO_MODE:-0} == 1 ]]; then
     : "${ADMIN_USER:?ADMIN_USER wajib diisi}"
     : "${ADMIN_PASS:?ADMIN_PASS wajib diisi}"
-    set_env() { local key=$1 value=$2; if grep -q "^${key}=" .env; then sed -i "s|^${key}=.*|${key}=${value}|" .env; else echo "${key}=${value}" >>.env; fi; }
-    set_env APP_URL "https://$PANEL_FQDN"
-    set_env APP_TIMEZONE "Asia/Jakarta"
-    set_env CACHE_STORE redis
-    set_env SESSION_DRIVER redis
-    set_env QUEUE_CONNECTION redis
-    set_env REDIS_HOST 127.0.0.1
-    set_env REDIS_PORT 6379
-    set_env DB_CONNECTION mysql
-    set_env DB_HOST 127.0.0.1
-    set_env DB_PORT 3306
-    set_env DB_DATABASE panel
-    set_env DB_USERNAME pterodactyl
-    set_env DB_PASSWORD "$DB_PASSWORD"
-    set_env MAIL_MAILER log
-    set_env MAIL_FROM_ADDRESS "${ADMIN_USER}@${DOMAIN}"
-    set_env MAIL_FROM_NAME Reviactyl
-    echo "[AUTO] Konfigurasi aplikasi dan database selesai."
-  else
-    echo
-    echo "PANDUAN MENGISI WIZARD (ikuti urutannya):"
-    echo "  [Setup]  Egg Author Email : email kamu sendiri"
-    echo "  [Setup]  Application URL  : https://$PANEL_FQDN"
-    echo "  [Setup]  Timezone         : Asia/Jakarta"
-    echo "  [Setup]  Cache Driver     : redis"
-    echo "  [Setup]  Session Driver   : redis"
-    echo "  [Setup]  Queue Driver     : redis"
-    echo "  [Setup]  UI settings editor : yes"
-    echo "  [Setup]  Telemetry        : no"
-    echo "  [Setup]  Redis Host/Password/Port : Enter saja (bawaan)"
-    echo "  [DB]     Database         : OTOMATIS diisi installer (MariaDB) - tidak ada wizard database."
-    echo "  [Mail]   Mail Driver      : sendmail (paling simpel; SMTP bisa diatur nanti dari panel)"
-    echo "  [Mail]   Mail From Address: no-reply@$DOMAIN"
-    echo "  [Mail]   Mail From Name   : Reviactyl"
-    echo "  Setelah wizard: buat akun admin panel (email/username/password bebas, min. 8 karakter)."
-    read -r -p "Tekan Enter untuk membuka wizard..." _
-    php artisan p:environment:setup
-    # Wizard database SENGAJA dilewati: semua nilainya dibuat installer
-    # sendiri (MariaDB, db panel, user pterodactyl, password acak di atas),
-    # jadi tidak ada keputusan untuk pemakai — dan bawaan wizard-nya justru
-    # menyesatkan (driver SQLite + username 'reviactyl' yang tidak ada).
-    # Perintah artisan-nya menerima opsi lengkap (terverifikasi dari kode
-    # sumber Reviactyl DatabaseSettingsCommand), isi langsung tanpa prompt.
-    echo "[OTOMATIS] Pengaturan database diisi installer (MariaDB / panel / pterodactyl)."
-    php artisan p:environment:database --driver=mariadb --host=127.0.0.1 --port=3306 --database=panel --username=pterodactyl --password="$DB_PASSWORD"
-    php artisan p:environment:mail
+    ADMIN_USERNAME=$ADMIN_USER
+    ADMIN_EMAIL="${ADMIN_USER}@${DOMAIN}"
+    MAIL_FROM="${ADMIN_USER}@${DOMAIN}"
   fi
+  # SEMUA konfigurasi panel diisi otomatis di sini — pemakai TIDAK perlu
+  # mengisi wizard bawaan Reviactyl (p:environment:setup/database/mail).
+  # Wizard itu pilihan bawaannya menyesatkan (driver database SQLite,
+  # username database 'reviactyl' yang tidak pernah dibuat, mailer smtp
+  # tanpa server) dan sudah menyebabkan kegagalan nyata di pemakaian
+  # langsung. Nilai-nilai di bawah ini sama persis dengan jalur otomatis
+  # yang sudah terbukti jalan.
+  set_env() { local key=$1 value=$2; if grep -q "^${key}=" .env; then sed -i "s|^${key}=.*|${key}=${value}|" .env; else echo "${key}=${value}" >>.env; fi; }
+  set_env APP_URL "https://$PANEL_FQDN"
+  set_env APP_TIMEZONE "Asia/Jakarta"
+  set_env CACHE_STORE redis
+  set_env SESSION_DRIVER redis
+  set_env QUEUE_CONNECTION redis
+  set_env REDIS_HOST 127.0.0.1
+  set_env REDIS_PORT 6379
+  set_env DB_CONNECTION mysql
+  set_env DB_HOST 127.0.0.1
+  set_env DB_PORT 3306
+  set_env DB_DATABASE panel
+  set_env DB_USERNAME pterodactyl
+  set_env DB_PASSWORD "$DB_PASSWORD"
+  set_env MAIL_MAILER log
+  set_env MAIL_FROM_ADDRESS "$MAIL_FROM"
+  set_env MAIL_FROM_NAME Reviactyl
+  echo "[OTOMATIS] Konfigurasi aplikasi, database, dan email selesai (tanpa wizard)."
   grep -q '^TRUSTED_PROXIES=' .env && sed -i 's|^TRUSTED_PROXIES=.*|TRUSTED_PROXIES=*|' .env || echo 'TRUSTED_PROXIES=*' >>.env
   # Designify only accepts changes saved from its UI when this is false. Keep
   # environment-only mode disabled so the administrator can edit branding,
@@ -399,17 +395,13 @@ SQL
   mariadb -e "SET GLOBAL explicit_defaults_for_timestamp = ON" 2>/dev/null || true
   mariadb -e "SET GLOBAL sql_mode = REPLACE(REPLACE(@@GLOBAL.sql_mode, 'NO_ZERO_IN_DATE', ''), 'NO_ZERO_DATE', '')" 2>/dev/null || true
   php artisan migrate --seed --force
-  if [[ ${AUTO_MODE:-0} == 1 ]]; then
-    php artisan p:user:make \
-      --email="${ADMIN_USER}@${DOMAIN}" \
-      --username="$ADMIN_USER" \
-      --name-first=Owner \
-      --name-last=Admin \
-      --password="$ADMIN_PASS" \
-      --admin=1
-  else
-    php artisan p:user:make
-  fi
+  php artisan p:user:make \
+    --email="$ADMIN_EMAIL" \
+    --username="$ADMIN_USERNAME" \
+    --name-first=Owner \
+    --name-last=Admin \
+    --password="$ADMIN_PASS" \
+    --admin=1
   chown -R www-data:www-data "$PANEL_DIR"
   chmod -R 755 "$PANEL_DIR/storage" "$PANEL_DIR/bootstrap/cache"
 

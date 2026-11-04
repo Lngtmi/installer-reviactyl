@@ -50,29 +50,13 @@ sudo bash install-reviactyl.sh install
 
 Atau unduh ZIP dari tombol **Code → Download ZIP** di halaman repo ini, ekstrak, lalu jalankan `sudo bash install-reviactyl.sh install`.
 
-## Panduan Mengisi Wizard (mode interaktif)
+## Semua Diisi Otomatis — Tanpa Wizard
 
-Setelah pertanyaan domain dan (untuk mode Direct) pemeriksaan A record selesai, installer membuka wizard Reviactyl. Isi **persis** seperti ini, urut dari atas:
+Installer ini **tidak memakai wizard bawaan Reviactyl** (`p:environment:setup` dan kawan-kawan). Wizard itu pilihan bawaannya menyesatkan — driver database SQLite, username database yang tidak pernah dibuat, mailer SMTP tanpa server — dan terbukti membuat instalasi gagal di tengah jalan.
 
-**Wizard setup:**
-1. Egg Author Email: email kamu sendiri
-2. Application URL: `https://<subdomain-panel>.<domain>` — persis yang ditampilkan script
-3. Application Timezone: `Asia/Jakarta`
-4. Cache Driver: `redis`
-5. Session Driver: `redis`
-6. Queue Driver: `redis`
-7. Enable UI based settings editor: `yes`
-8. Enable telemetry: `no`
-9. Redis Host / Redis Password / Redis Port: **Enter saja** (pakai bawaan; password dikosongkan)
+Sebagai gantinya, script menanyakan semua yang perlu **di awal saja**: domain, subdomain panel, subdomain node, lalu email + username + password admin panel. Setelah kamu mengetik `HAPUS`, seluruh konfigurasi (URL panel, timezone Asia/Jakarta, cache/session/queue Redis, database MariaDB, email) **diisi otomatis oleh installer** dan instalasi berjalan sampai muncul tulisan **SELESAI** tanpa pertanyaan apa pun di tengah.
 
-**Database: OTOMATIS** — tidak ada wizard database. Semua nilai database dibuat oleh installer sendiri (MariaDB, database `panel`, user `pterodactyl`, password acak), jadi installer mengisinya langsung tanpa bertanya. (Dulu langkah ini berupa wizard dan sering menjebak: pilihan bawaannya SQLite dan username `reviactyl` yang tidak ada — makanya sekarang diotomatiskan.)
-
-**Wizard email:**
-10. Mail Driver: `sendmail` — paling simpel, tidak ditanya kredensial server apa pun (pilihan lain: smtp/mailgun/mandrill/postmark butuh akun/API key; email beneran bisa diatur belakangan dari panel)
-11. Mail From Address: `no-reply@<domain kamu>`
-12. Mail From Name: `Reviactyl`
-
-**Terakhir:** buat akun admin panel — email, username, nama, dan password login (minimal 8 karakter), bebas sesuai keinginanmu. Setelah itu script berjalan sendiri sampai muncul tulisan **SELESAI** beserta alamat panelnya.
+Catatan email: mailer disetel ke mode `log` — email dicatat ke log panel, tidak dikirim keluar. Itu cukup untuk menjalankan panel; kalau nanti mau email beneran terkirim (mis. reset password), atur SMTP dari dalam panel setelah instalasi selesai.
 
 ### Variabel mode otomatis
 
