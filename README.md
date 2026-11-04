@@ -65,18 +65,12 @@ Setelah pertanyaan domain dan (untuk mode Direct) pemeriksaan A record selesai, 
 8. Enable telemetry: `no`
 9. Redis Host / Redis Password / Redis Port: **Enter saja** (pakai bawaan; password dikosongkan)
 
-**Wizard database:**
-10. **Database Driver: `mariadb`** — ⚠️ JANGAN tekan Enter! Pilihan bawaannya adalah **SQLite** dan instalasi akan **gagal** ("Database file ... does not exist")
-11. Database Host: Enter (127.0.0.1)
-12. Database Port: Enter (3306)
-13. Database Name: `panel`
-14. Database Username: `pterodactyl`
-15. Database Password: password yang ditampilkan script di blok "PANDUAN MENGISI WIZARD" sebelum wizard dibuka (berubah setiap instalasi — jangan pakai dari instalasi sebelumnya)
+**Database: OTOMATIS** — tidak ada wizard database. Semua nilai database dibuat oleh installer sendiri (MariaDB, database `panel`, user `pterodactyl`, password acak), jadi installer mengisinya langsung tanpa bertanya. (Dulu langkah ini berupa wizard dan sering menjebak: pilihan bawaannya SQLite dan username `reviactyl` yang tidak ada — makanya sekarang diotomatiskan.)
 
 **Wizard email:**
-16. Mail Driver: `sendmail` — paling simpel, tidak ditanya kredensial server apa pun (pilihan lain: smtp/mailgun/mandrill/postmark butuh akun/API key; email beneran bisa diatur belakangan dari panel)
-17. Mail From Address: `no-reply@<domain kamu>`
-18. Mail From Name: `Reviactyl`
+10. Mail Driver: `sendmail` — paling simpel, tidak ditanya kredensial server apa pun (pilihan lain: smtp/mailgun/mandrill/postmark butuh akun/API key; email beneran bisa diatur belakangan dari panel)
+11. Mail From Address: `no-reply@<domain kamu>`
+12. Mail From Name: `Reviactyl`
 
 **Terakhir:** buat akun admin panel — email, username, nama, dan password login (minimal 8 karakter), bebas sesuai keinginanmu. Setelah itu script berjalan sendiri sampai muncul tulisan **SELESAI** beserta alamat panelnya.
 

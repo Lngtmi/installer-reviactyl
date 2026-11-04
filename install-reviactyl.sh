@@ -371,19 +371,21 @@ SQL
     echo "  [Setup]  UI settings editor : yes"
     echo "  [Setup]  Telemetry        : no"
     echo "  [Setup]  Redis Host/Password/Port : Enter saja (bawaan)"
-    echo "  [DB]     Database Driver  : mariadb   <-- JANGAN Enter! Bawaan SQLite akan GAGAL."
-    echo "  [DB]     Database host    : 127.0.0.1 (Enter)"
-    echo "  [DB]     Database port    : 3306 (Enter)"
-    echo "  [DB]     Database name    : panel"
-    echo "  [DB]     Database user    : pterodactyl"
-    echo "  [DB]     Database pass    : $DB_PASSWORD"
+    echo "  [DB]     Database         : OTOMATIS diisi installer (MariaDB) - tidak ada wizard database."
     echo "  [Mail]   Mail Driver      : sendmail (paling simpel; SMTP bisa diatur nanti dari panel)"
     echo "  [Mail]   Mail From Address: no-reply@$DOMAIN"
     echo "  [Mail]   Mail From Name   : Reviactyl"
     echo "  Setelah wizard: buat akun admin panel (email/username/password bebas, min. 8 karakter)."
     read -r -p "Tekan Enter untuk membuka wizard..." _
     php artisan p:environment:setup
-    php artisan p:environment:database
+    # Wizard database SENGAJA dilewati: semua nilainya dibuat installer
+    # sendiri (MariaDB, db panel, user pterodactyl, password acak di atas),
+    # jadi tidak ada keputusan untuk pemakai — dan bawaan wizard-nya justru
+    # menyesatkan (driver SQLite + username 'reviactyl' yang tidak ada).
+    # Perintah artisan-nya menerima opsi lengkap (terverifikasi dari kode
+    # sumber Reviactyl DatabaseSettingsCommand), isi langsung tanpa prompt.
+    echo "[OTOMATIS] Pengaturan database diisi installer (MariaDB / panel / pterodactyl)."
+    php artisan p:environment:database --driver=mariadb --host=127.0.0.1 --port=3306 --database=panel --username=pterodactyl --password="$DB_PASSWORD"
     php artisan p:environment:mail
   fi
   grep -q '^TRUSTED_PROXIES=' .env && sed -i 's|^TRUSTED_PROXIES=.*|TRUSTED_PROXIES=*|' .env || echo 'TRUSTED_PROXIES=*' >>.env
