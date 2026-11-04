@@ -1,6 +1,9 @@
 # Installer Reviactyl
 
-Script installer **Reviactyl Panel + Agent (Wings)** untuk VPS — lengkap dengan Cloudflare Tunnel (untuk VPS tanpa IP publik) atau mode direct (VPS dengan IP publik).
+Script installer **Reviactyl Panel + Agent (Wings)** untuk VPS. Jaringan VPS **terdeteksi otomatis** di awal:
+
+- **VPS dengan IPv4 publik → mode Direct** — HTTPS langsung dari VPS (Let's Encrypt), tanpa tunnel
+- **VPS di belakang NAT → mode Cloudflare Tunnel** — tanpa IP publik tetap bisa online
 
 Satu file, tanpa dependensi script lain:
 
@@ -25,6 +28,8 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Lngtmi/installer-reviactyl/m
 ```
 
 Script akan bertanya domain, subdomain, dan data admin satu per satu (mode interaktif).
+
+> **Mode Direct (IPv4 publik):** sebelum instalasi lanjut, script menampilkan catatan berisi 2 **A record** yang wajib kamu buat lebih dulu di panel DNS domainmu — subdomain panel dan subdomain node diarahkan ke IP publik VPS. Script memeriksa sendiri apakah kedua record sudah benar, dan **berhenti di awal** dengan pesan jelas bila belum — supaya tidak ada lagi kegagalan sertifikat (NXDOMAIN) di tengah instalasi. Mode Tunnel tidak butuh record manual; record-nya dibuatkan otomatis saat kamu login Cloudflare di tengah instalasi.
 
 Mode otomatis (tanpa pertanyaan):
 
@@ -54,7 +59,7 @@ Atau unduh ZIP dari tombol **Code → Download ZIP** di halaman repo ini, ekstra
 | `ADMIN_PASS` | Ya (mode otomatis) | Password admin panel |
 | `PANEL_SUB` | Tidak | Subdomain panel, default `panel` → `panel.contoh.com` |
 | `NODE_SUB` | Tidak | Subdomain node, default `node` → `node.contoh.com` |
-| `DIRECT_MODE` | Tidak | `1` = tanpa Cloudflare Tunnel (VPS IP publik), default tunnel |
+| `DIRECT_MODE` | Tidak | `1` = tanpa Cloudflare Tunnel (VPS IP publik). Bila tidak diisi, mode dipilih otomatis dari hasil deteksi jaringan VPS |
 | `AUTO_MODE` | Tidak | `1` = mode otomatis tanpa pertanyaan |
 
 ## Ganti domain setelah terinstall

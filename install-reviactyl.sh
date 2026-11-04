@@ -1,5 +1,7 @@
 #!/usr/bin/env bash
-# Reviactyl + Cloudflare Tunnel installer for Ubuntu 22.04 / 24.04 or Debian 12.
+# Reviactyl installer for Ubuntu 22.04 / 24.04 or Debian 12 (versi GitHub).
+# Jaringan terdeteksi otomatis: IPv4 publik -> mode Direct (HTTPS langsung,
+# A record panel + node wajib dibuat lebih dulu), NAT -> Cloudflare Tunnel.
 # Run as root: bash install-reviactyl.sh install
 
 set -Eeuo pipefail
@@ -11,7 +13,10 @@ NGINX_FILE=/etc/nginx/sites-available/reviactyl
 STATE_FILE=/root/reviactyl-installer.env
 REVIA_CF_CONFIG=/etc/cloudflared/reviactyl.yml
 REVIA_CF_SERVICE=cloudflared-reviactyl
+DIRECT_MODE_PRESET=0
+[[ -n ${DIRECT_MODE:-} ]] && DIRECT_MODE_PRESET=1
 DIRECT_MODE=${DIRECT_MODE:-0}
+PUBLIC_IP=${PUBLIC_IP:-}
 
 die() { echo "ERROR: $*" >&2; exit 1; }
 need_root() { [[ ${EUID:-999} -eq 0 ]] || die "Jalankan sebagai root (sudo -i)."; }
@@ -44,6 +49,105 @@ wait_for_apt() {
   done
 }
 
+detect_ip_mode() {
+  # Logika yang sama dengan bot: bandingkan IP egress publik VPS dengan
+  # daftar IP yang benar-benar terpasang di interface. Sama = IPv4 publik
+  # (direct), beda = di belakang NAT (tunnel), tidak jelas = unknown.
+  local svc egress iface
+  DETECT_RESULT=unknown
+  PUBLIC_IP=""
+  for svc in https://api.ipify.org https://ifconfig.me/ip https://icanhazip.com; do
+    egress=$(curl -4 -fsS --max-time 8 "$svc" 2>/dev/null | tr -d '[:space:]' || true)
+    if [[ $egress =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]]; then PUBLIC_IP=$egress; break; fi
+  done
+  [[ -n $PUBLIC_IP ]] || return 0
+  iface=$( { ip -4 addr show scope global 2>/dev/null | awk '{print $2}' | cut -d/ -f1; hostname -I 2>/dev/null | tr ' ' '\n'; } | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$' | sort -u || true)
+  [[ -n $iface ]] || return 0
+  if grep -qx "$PUBLIC_IP" <<<"$iface"; then DETECT_RESULT=public; else DETECT_RESULT=nat; fi
+}
+
+choose_network_mode() {
+  # Khusus jalur interaktif (pemakaian langsung dari GitHub). Bila mode sudah
+  # ditentukan pemanggil lewat env (mis. bot), hormati dan jangan menebak.
+  if [[ ${AUTO_MODE:-0} == 1 || $DIRECT_MODE_PRESET == 1 ]]; then
+    if [[ $DIRECT_MODE == 1 ]]; then echo "[MODE] Mode DIRECT (ditentukan pemanggil)."; else echo "[MODE] Mode TUNNEL (ditentukan pemanggil)."; fi
+    return
+  fi
+  echo "Mendeteksi jaringan VPS..."
+  detect_ip_mode
+  case "$DETECT_RESULT" in
+    public)
+      DIRECT_MODE=1
+      echo "[MODE] Terdeteksi IPv4 publik $PUBLIC_IP di VPS ini -> mode DIRECT (HTTPS langsung, tanpa tunnel)."
+      ;;
+    nat)
+      DIRECT_MODE=0
+      echo "[MODE] VPS berada di belakang NAT (IP publik $PUBLIC_IP tidak terpasang di interface) -> mode TUNNEL Cloudflare."
+      ;;
+    *)
+      echo "[MODE] Jenis jaringan VPS tidak dapat dipastikan otomatis."
+      local choice
+      read -r -p "Pilih mode: [1] Direct - VPS punya IPv4 publik  [2] Tunnel - VPS di belakang NAT [2]: " choice || choice=2
+      if [[ $choice == 1 ]]; then
+        DIRECT_MODE=1
+        if [[ -z $PUBLIC_IP ]]; then
+          read -r -p "IP publik VPS ini: " PUBLIC_IP || PUBLIC_IP=""
+          [[ $PUBLIC_IP =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+$ ]] || die "Format IP publik tidak valid."
+        fi
+        echo "[MODE] Mode DIRECT dipilih manual (IP publik: $PUBLIC_IP)."
+      else
+        DIRECT_MODE=0
+        echo "[MODE] Mode TUNNEL dipilih manual."
+      fi
+      ;;
+  esac
+}
+
+dns_gate_direct() {
+  # Mode direct menerbitkan sertifikat lewat certbot, jadi A record panel +
+  # node HARUS sudah mengarah ke IP VPS ini sebelum instalasi berjalan.
+  # Installer versi GitHub tidak membuatkan record (tidak ada token DNS
+  # pemakai), jadi catatannya ditampilkan di awal dan hasilnya diperiksa
+  # sendiri di sini — tidak ada lagi kegagalan NXDOMAIN di tengah instalasi.
+  [[ $DIRECT_MODE == 1 && ${AUTO_MODE:-0} != 1 ]] || return 0
+  echo
+  echo "================================================================"
+  echo "  CATATAN PENTING - MODE DIRECT (IPv4 PUBLIK: $PUBLIC_IP)"
+  echo "================================================================"
+  echo "  Buat DULU 2 A record berikut di panel DNS domain $DOMAIN"
+  echo "  (bila memakai Cloudflare, pilih 'DNS only' / awan abu-abu):"
+  echo
+  echo "    A    $PANEL_FQDN    ->    $PUBLIC_IP"
+  echo "    A    $NODE_FQDN     ->    $PUBLIC_IP"
+  echo
+  echo "  Tanpa record ini, penerbitan sertifikat HTTPS akan GAGAL"
+  echo "  dan instalasi berhenti di tengah. Record yang baru dibuat"
+  echo "  biasanya aktif dalam 1-5 menit."
+  echo "================================================================"
+  local host ips ok all_ok ans
+  while true; do
+    all_ok=1
+    for host in "$PANEL_FQDN" "$NODE_FQDN"; do
+      ips=$(getent ahosts "$host" 2>/dev/null | awk '{print $1}' | sort -u || true)
+      ok=0
+      if grep -qx "$PUBLIC_IP" <<<"$ips"; then ok=1; fi
+      if (( ok )); then
+        echo "[DNS_OK] $host sudah mengarah ke $PUBLIC_IP."
+      else
+        all_ok=0
+        if [[ -n $ips ]]; then
+          echo "[DNS_BELUM] $host saat ini mengarah ke: $(echo $ips) (seharusnya $PUBLIC_IP)."
+        else
+          echo "[DNS_BELUM] $host belum ter-resolve sama sekali."
+        fi
+      fi
+    done
+    if (( all_ok )); then echo "[DNS_OK] Kedua subdomain sudah benar. Instalasi dilanjutkan."; return 0; fi
+    read -r -p "Tekan Enter untuk memeriksa lagi, atau ketik 'batal' untuk berhenti: " ans || die "Dibatalkan. Buat dulu A record di atas, lalu jalankan ulang installer."
+    if [[ ${ans,,} == batal ]]; then die "Dibatalkan. Buat dulu A record di atas, lalu jalankan ulang installer."; fi
+  done
+}
+
 ask_network() {
   if [[ ${AUTO_MODE:-0} == 1 ]]; then
     : "${DOMAIN:?DOMAIN wajib diisi}"
@@ -60,10 +164,15 @@ ask_network() {
   [[ $DOMAIN =~ ^[A-Za-z0-9.-]+\.[A-Za-z]{2,}$ ]] || die "Format domain tidak valid."
   read -r -p "Subdomain panel [panel]: " PANEL_SUB
   read -r -p "Subdomain node [node]: " NODE_SUB
-  read -r -p "Port Agent lokal untuk Cloudflare Tunnel [443]: " AGENT_PORT
+  if [[ $DIRECT_MODE == 1 ]]; then
+    read -r -p "Port Agent [8080]: " AGENT_PORT
+    AGENT_PORT=${AGENT_PORT:-8080}
+  else
+    read -r -p "Port Agent lokal untuk Cloudflare Tunnel [443]: " AGENT_PORT
+    AGENT_PORT=${AGENT_PORT:-443}
+  fi
   PANEL_SUB=${PANEL_SUB:-panel}
   NODE_SUB=${NODE_SUB:-node}
-  AGENT_PORT=${AGENT_PORT:-443}
   [[ $AGENT_PORT =~ ^[0-9]+$ ]] || die "Port harus angka."
   PANEL_FQDN="${PANEL_SUB}.${DOMAIN}"
   NODE_FQDN="${NODE_SUB}.${DOMAIN}"
@@ -136,7 +245,9 @@ EOF
 
 install_panel() {
   need_root
+  choose_network_mode
   ask_network
+  dns_gate_direct
   echo
   echo "Panel : https://$PANEL_FQDN"
   echo "Node  : https://$NODE_FQDN (port Agent: $AGENT_PORT)"
