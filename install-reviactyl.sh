@@ -103,6 +103,27 @@ choose_network_mode() {
   esac
 }
 
+resolve_public_ips() {
+  # Tanya resolver PUBLIK langsung lewat DNS-over-HTTPS, bukan resolver lokal
+  # VPS: cache negatif resolver lokal bisa tetap menjawab "tidak ada" selama
+  # beberapa menit untuk record yang sebenarnya sudah benar (kejadian live
+  # 2026-11-04: bebeb.everything.my.id sudah live di Cloudflare tetapi getent
+  # di VPS masih buta). Let's Encrypt juga menilai dari sisi publik, jadi
+  # inilah standar yang benar untuk gate. Urutan: Cloudflare DoH -> Google
+  # DoH -> getent lokal sebagai cadangan terakhir.
+  local host=$1 out=""
+  if command -v curl >/dev/null 2>&1; then
+    out=$(curl -fsS --max-time 8 -H 'accept: application/dns-json' "https://cloudflare-dns.com/dns-query?name=${host}&type=A" 2>/dev/null | grep -oE '"data":"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | sort -u || true)
+    if [[ -z $out ]]; then
+      out=$(curl -fsS --max-time 8 "https://dns.google/resolve?name=${host}&type=A" 2>/dev/null | grep -oE '"data":"[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+"' | grep -oE '[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+' | sort -u || true)
+    fi
+  fi
+  if [[ -z $out ]]; then
+    out=$(getent ahosts "$host" 2>/dev/null | awk '{print $1}' | sort -u || true)
+  fi
+  printf '%s' "$out"
+}
+
 dns_gate_direct() {
   # Mode direct menerbitkan sertifikat lewat certbot, jadi A record panel +
   # node HARUS sudah mengarah ke IP VPS ini sebelum instalasi berjalan.
@@ -128,7 +149,7 @@ dns_gate_direct() {
   while true; do
     all_ok=1
     for host in "$PANEL_FQDN" "$NODE_FQDN"; do
-      ips=$(getent ahosts "$host" 2>/dev/null | awk '{print $1}' | sort -u || true)
+      ips=$(resolve_public_ips "$host")
       ok=0
       if grep -qx "$PUBLIC_IP" <<<"$ips"; then ok=1; fi
       if (( ok )); then

@@ -29,7 +29,7 @@ bash <(curl -fsSL https://raw.githubusercontent.com/Lngtmi/installer-reviactyl/m
 
 Script akan bertanya domain, subdomain, dan data admin satu per satu (mode interaktif).
 
-> **Mode Direct (IPv4 publik):** sebelum instalasi lanjut, script menampilkan catatan berisi 2 **A record** yang wajib kamu buat lebih dulu di panel DNS domainmu — subdomain panel dan subdomain node diarahkan ke IP publik VPS. Script memeriksa sendiri apakah kedua record sudah benar, dan **berhenti di awal** dengan pesan jelas bila belum — supaya tidak ada lagi kegagalan sertifikat (NXDOMAIN) di tengah instalasi. Mode Tunnel tidak butuh record manual; record-nya dibuatkan otomatis saat kamu login Cloudflare di tengah instalasi.
+> **Mode Direct (IPv4 publik):** sebelum instalasi lanjut, script menampilkan catatan berisi 2 **A record** yang wajib kamu buat lebih dulu di panel DNS domainmu — subdomain panel dan subdomain node diarahkan ke IP publik VPS. Script memeriksa sendiri apakah kedua record sudah benar (lewat resolver publik, jadi tidak tertipu cache DNS lokal VPS), dan **berhenti di awal** dengan pesan jelas bila belum — supaya tidak ada lagi kegagalan sertifikat (NXDOMAIN) di tengah instalasi. Mode Tunnel tidak butuh record manual; record-nya dibuatkan otomatis saat kamu login Cloudflare di tengah instalasi.
 
 Mode otomatis (tanpa pertanyaan):
 
