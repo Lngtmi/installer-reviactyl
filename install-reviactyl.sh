@@ -377,7 +377,7 @@ SQL
     echo "  [DB]     Database name    : panel"
     echo "  [DB]     Database user    : pterodactyl"
     echo "  [DB]     Database pass    : $DB_PASSWORD"
-    echo "  [Mail]   Mail Driver      : log"
+    echo "  [Mail]   Mail Driver      : sendmail (paling simpel; SMTP bisa diatur nanti dari panel)"
     echo "  [Mail]   Mail From Address: no-reply@$DOMAIN"
     echo "  [Mail]   Mail From Name   : Reviactyl"
     echo "  Setelah wizard: buat akun admin panel (email/username/password bebas, min. 8 karakter)."

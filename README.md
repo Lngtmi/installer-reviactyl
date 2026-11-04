@@ -74,7 +74,7 @@ Setelah pertanyaan domain dan (untuk mode Direct) pemeriksaan A record selesai, 
 15. Database Password: password yang ditampilkan script di blok "PANDUAN MENGISI WIZARD" sebelum wizard dibuka (berubah setiap instalasi — jangan pakai dari instalasi sebelumnya)
 
 **Wizard email:**
-16. Mail Driver: `log`
+16. Mail Driver: `sendmail` — paling simpel, tidak ditanya kredensial server apa pun (pilihan lain: smtp/mailgun/mandrill/postmark butuh akun/API key; email beneran bisa diatur belakangan dari panel)
 17. Mail From Address: `no-reply@<domain kamu>`
 18. Mail From Name: `Reviactyl`
 
